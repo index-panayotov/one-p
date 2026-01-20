@@ -95,6 +95,6 @@ export function loadAppConfig(): AppConfig {
   };
 }
 
-export function getAnthropicApiKey(): string | null {
-  return process.env.ANTHROPIC_API_KEY || null;
-}
+// Re-export settings module
+export * from './settings.js';
+export * from './setup.js';

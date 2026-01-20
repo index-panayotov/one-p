@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { loadAppConfig, getAnthropicApiKey } from '../../config/index.js';
+import { loadAppConfig, settingsExist, getApiKey } from '../../config/index.js';
+import { runInitialSetup } from '../../config/setup.js';
 import { StorageManager } from '../../storage/index.js';
 import { ConversationManager } from '../../ai/index.js';
 import {
@@ -12,6 +13,28 @@ import {
   displayProgress,
 } from '../../ui/index.js';
 
+async function ensureApiKey(): Promise<boolean> {
+  if (!settingsExist()) {
+    console.log(chalk.cyan('First time setup required.'));
+    console.log();
+    const settings = await runInitialSetup();
+    if (!settings) {
+      displayError('Setup cancelled.');
+      return false;
+    }
+    console.log();
+  }
+
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    displayError('No API key configured.');
+    console.log('Run "one-p config" to set up your API key.');
+    return false;
+  }
+
+  return true;
+}
+
 export function featureCommand(program: Command): void {
   const feature = program.command('feature').description('Manage features/epics');
 
@@ -20,9 +43,7 @@ export function featureCommand(program: Command): void {
     .command('new')
     .description('Create a new feature/epic with AI guidance')
     .action(async () => {
-      const apiKey = getAnthropicApiKey();
-      if (!apiKey) {
-        displayError('ANTHROPIC_API_KEY environment variable is not set.');
+      if (!(await ensureApiKey())) {
         process.exit(1);
       }
 

@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { loadAppConfig, getAnthropicApiKey } from '../../config/index.js';
+import { loadAppConfig, settingsExist, getApiKey } from '../../config/index.js';
+import { runInitialSetup } from '../../config/setup.js';
 import { StorageManager } from '../../storage/index.js';
 import { ConversationManager } from '../../ai/index.js';
 import {
@@ -12,6 +13,28 @@ import {
   displayStoryList,
 } from '../../ui/index.js';
 
+async function ensureApiKey(): Promise<boolean> {
+  if (!settingsExist()) {
+    console.log(chalk.cyan('First time setup required.'));
+    console.log();
+    const settings = await runInitialSetup();
+    if (!settings) {
+      displayError('Setup cancelled.');
+      return false;
+    }
+    console.log();
+  }
+
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    displayError('No API key configured.');
+    console.log('Run "one-p config" to set up your API key.');
+    return false;
+  }
+
+  return true;
+}
+
 export function storyCommand(program: Command): void {
   const story = program.command('story').description('Manage user stories');
 
@@ -20,9 +43,7 @@ export function storyCommand(program: Command): void {
     .command('new')
     .description('Create a new user story with AI guidance')
     .action(async () => {
-      const apiKey = getAnthropicApiKey();
-      if (!apiKey) {
-        displayError('ANTHROPIC_API_KEY environment variable is not set.');
+      if (!(await ensureApiKey())) {
         process.exit(1);
       }
 
@@ -127,15 +148,15 @@ export function storyCommand(program: Command): void {
 
       const storage = new StorageManager(appConfig.projectPath);
       const featureId = options.feature || 'backlog';
-      const story = await storage.getStory(featureId, id);
+      const storyData = await storage.getStory(featureId, id);
 
-      if (!story) {
+      if (!storyData) {
         displayError(`Story "${id}" not found in feature "${featureId}".`);
         process.exit(1);
       }
 
-      displayHeader(`Story: ${story.title}`);
-      displayStory(story, true);
+      displayHeader(`Story: ${storyData.title}`);
+      displayStory(storyData, true);
       console.log();
     });
 
@@ -145,9 +166,7 @@ export function storyCommand(program: Command): void {
     .description('AI review of story quality (INVEST criteria)')
     .option('-f, --feature <feature>', 'Feature containing the story (default: backlog)')
     .action(async (id: string, options: { feature?: string }) => {
-      const apiKey = getAnthropicApiKey();
-      if (!apiKey) {
-        displayError('ANTHROPIC_API_KEY environment variable is not set.');
+      if (!(await ensureApiKey())) {
         process.exit(1);
       }
 

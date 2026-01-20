@@ -1,7 +1,8 @@
 import { Command } from 'commander';
 import * as readline from 'readline';
 import chalk from 'chalk';
-import { loadAppConfig, getAnthropicApiKey } from '../../config/index.js';
+import { loadAppConfig, settingsExist, getApiKey, getModelInfo, getModel } from '../../config/index.js';
+import { runInitialSetup } from '../../config/setup.js';
 import { ConversationManager } from '../../ai/index.js';
 import { displayHeader, displayError, displayWarning, displayInfo } from '../../ui/index.js';
 
@@ -10,13 +11,24 @@ export function chatCommand(program: Command): void {
     .command('chat')
     .description('Start an interactive AI chat session for story writing')
     .action(async () => {
-      // Check for API key
-      const apiKey = getAnthropicApiKey();
-      if (!apiKey) {
-        displayError('ANTHROPIC_API_KEY environment variable is not set.');
+      // Check for settings - run setup if first time
+      if (!settingsExist()) {
+        console.log(chalk.cyan('First time setup required.'));
         console.log();
-        console.log('Set it with:');
-        console.log(chalk.cyan('  export ANTHROPIC_API_KEY=your-api-key'));
+        const settings = await runInitialSetup();
+        if (!settings) {
+          displayError('Setup cancelled. Cannot start chat without configuration.');
+          process.exit(1);
+        }
+        console.log();
+      }
+
+      // Check for API key
+      const apiKey = getApiKey();
+      if (!apiKey) {
+        displayError('No API key configured.');
+        console.log();
+        console.log('Run "one-p config" to set up your API key.');
         console.log();
         process.exit(1);
       }
@@ -30,9 +42,14 @@ export function chatCommand(program: Command): void {
         process.exit(1);
       }
 
+      // Get model info
+      const modelId = getModel();
+      const modelInfo = getModelInfo(modelId);
+
       displayHeader('One-P Interactive Chat');
       console.log(chalk.gray(`Project: ${appConfig.projectConfig?.name || 'Unknown'}`));
       console.log(chalk.gray(`Path: ${appConfig.projectPath}`));
+      console.log(chalk.gray(`Model: ${modelInfo?.name || modelId}`));
       console.log();
       console.log(chalk.cyan('I\'m your AI assistant for writing user stories and managing requirements.'));
       console.log(chalk.cyan('Type your message and press Enter. Type "exit" or "quit" to leave.'));

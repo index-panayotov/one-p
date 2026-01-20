@@ -1,22 +1,30 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { getApiKey, getModel } from '../config/settings.js';
 
 let client: Anthropic | null = null;
+let currentApiKey: string | null = null;
 
 export function getAnthropicClient(): Anthropic {
-  if (!client) {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = getApiKey();
 
-    if (!apiKey) {
-      throw new Error(
-        'ANTHROPIC_API_KEY environment variable is not set.\n' +
-          'Please set it with: export ANTHROPIC_API_KEY=your-api-key'
-      );
-    }
+  if (!apiKey) {
+    throw new Error(
+      'No API key configured.\n' +
+        'Run "one-p config" to set up your API key, or set ANTHROPIC_API_KEY environment variable.'
+    );
+  }
 
+  // Recreate client if API key changed
+  if (!client || currentApiKey !== apiKey) {
     client = new Anthropic({ apiKey });
+    currentApiKey = apiKey;
   }
 
   return client;
+}
+
+export function getCurrentModel(): string {
+  return getModel();
 }
 
 export type MessageRole = 'user' | 'assistant';
@@ -39,10 +47,11 @@ export async function streamMessage(
   tools: Anthropic.Messages.Tool[],
   callbacks: StreamCallbacks
 ): Promise<Anthropic.Messages.Message> {
-  const client = getAnthropicClient();
+  const anthropic = getAnthropicClient();
+  const model = getCurrentModel();
 
-  const response = await client.messages.create({
-    model: 'claude-opus-4-5-20251101',
+  const response = await anthropic.messages.create({
+    model,
     max_tokens: 4096,
     system: systemPrompt,
     messages: messages as Anthropic.Messages.MessageParam[],
@@ -73,8 +82,8 @@ export async function streamMessage(
   }
 
   // Get the final message
-  const finalResponse = await client.messages.create({
-    model: 'claude-opus-4-5-20251101',
+  const finalResponse = await anthropic.messages.create({
+    model,
     max_tokens: 4096,
     system: systemPrompt,
     messages: messages as Anthropic.Messages.MessageParam[],
@@ -89,10 +98,11 @@ export async function sendMessage(
   messages: ConversationMessage[],
   tools: Anthropic.Messages.Tool[]
 ): Promise<Anthropic.Messages.Message> {
-  const client = getAnthropicClient();
+  const anthropic = getAnthropicClient();
+  const model = getCurrentModel();
 
-  return client.messages.create({
-    model: 'claude-opus-4-5-20251101',
+  return anthropic.messages.create({
+    model,
     max_tokens: 4096,
     system: systemPrompt,
     messages: messages as Anthropic.Messages.MessageParam[],
